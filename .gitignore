@@ -5,6 +5,13 @@ __pycache__/
 
 # C extensions
 *.so
+# zip files
+*.zip
+# idea INFORMATION
+.idea
+birds/
+# data files
+
 
 # Distribution / packaging
 .Python
@@ -128,3 +135,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/data/birds/
+/data/CUB_200_2011/
+/.idea/
