@@ -1,2 +1,0 @@
-model_checkpoint_path: "stage1_discriminator_1.ckpt"
-all_model_checkpoint_paths: "stage1_discriminator_1.ckpt"
