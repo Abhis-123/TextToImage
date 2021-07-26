@@ -81,7 +81,6 @@ class Stage1Generator(keras.Model):
 class Stage1Discriminator(keras.Model):
     def __init__(self,*args, **kwargs):
         super(Stage1Discriminator, self).__init__(*args,**kwargs)
-        
         self.l1 = L.Conv2D(64,kernel_size=4,strides=2,padding='same',kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev = 0.02 ))
         self.l2 = L.Conv2D(128,kernel_size=4,strides=2,padding='same',kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev =0.02))
         self.l3 = L.BatchNormalization(axis = -1)
@@ -140,6 +139,15 @@ class Stage1Model(tf.keras.Model):
     self.c_dim = 128
     self.loss = {}
 
+
+  def load_weights(self,path):
+    z_noise = tf.random.normal((1, self.noise_dim))
+    embedding = tf.random.normal((1,1024))
+    image, phi = self.generator([embedding, z_noise])
+    logit = self.discriminator([image,embedding])
+    self.generator.load_weights(path+"/stage1_generator.h5")
+    self.discriminator.load_weights(path+"/stage1_discriminator.h5")
+
   def train(self, train_ds, batch_size = 64, num_epochs = 600):
     for epoch in range(num_epochs):
       print("Epoch %d/%d:\n "%(epoch + 1, num_epochs), end = "")
@@ -156,6 +164,7 @@ class Stage1Model(tf.keras.Model):
         if i % 5 == 0:
           print("=", end = "")
         image_batch, embedding_batch = next(batch_iter)
+        batch_size = image_batch.shape[0]
         z_noise = tf.random.normal((batch_size, self.noise_dim))
 
         mismatched_images = tf.roll(image_batch, shift = 1, axis = 0)
@@ -196,7 +205,7 @@ class Stage1Model(tf.keras.Model):
         template = " - generator_loss: {:.4f} - discriminator_loss: {:.4f} - epoch_time: {:.2f} s"
         print(template.format(tf.reduce_mean(generator_loss_log), tf.reduce_mean(discriminator_loss_log), epoch_time))
 
-      if (epoch + 1) % 1 == 0 or epoch == num_epochs - 1:
+      if (epoch + 1) % 10 == 0 or epoch == num_epochs - 1:
         save_path = "./lr_results/epoch_" + str(epoch + 1)
         temp_embeddings = None
         for _, embeddings in train_ds:
@@ -217,7 +226,7 @@ class Stage1Model(tf.keras.Model):
         weights_path = f"./weights/weights_{epoch+1}"
 
         if os.path.exists(weights_path)== False:
-            os.mkdir(weights_path)
+          os.makedirs(weights_path)
         self.generator.save_weights(weights_path+"/stage1_generator.h5")
         self.discriminator.save_weights(weights_path+"/stage1_discriminator.h5")
 
@@ -228,7 +237,6 @@ def generate_image(self, embedding, batch_size= 64):
     z_noise = tf.random.normal((batch_size, self.noise_dim))
     generated_image = self.generator([embedding, z_noise])
     return generated_image                
-
 
 
 
@@ -249,20 +257,21 @@ class Stage2Generator(keras.Model):
 
     def call(self,inputs):
         x = ResidualBlock(inputs, 128)
-        x = ResidualBlock(inputs,256)
+        x = ResidualBlock(x,256)
         x = UpSamplingBlock(x,256)
-        x = ResidualBlock(inputs,128)
+        x = ResidualBlock(x,128)
         x = UpSamplingBlock(x,256)
-        x = ResidualBlock(inputs,3)
+        x = ResidualBlock(x,3)
         return x
 
-def DownSamplingBlock(  inputs,
+def DownSamplingBlock(inputs,
                         num_filters, 
                         kernel_size= 4,
                         strides = 2,
                         batch_norm=True,
                         activation= True):
-    x = L.Conv2D(filters = num_filters, kernel_size= kernel_size , strides=strides, padding='same')
+    x = L.Conv2D(filters = num_filters, kernel_size=kernel_size , strides=strides, padding='same')(inputs)
+
     if batch_norm:
         x = L.BatchNormalization()(x)
     if activation:
@@ -349,7 +358,6 @@ class Stage2Discriminator(tf.keras.Model):
 
     A = tf.keras.layers.Add()([X, Y])
     A = tf.nn.leaky_relu(A)
-
     merged_input = tf.keras.layers.concatenate([A, T])
 
     Z = self.conv12(merged_input)
@@ -357,7 +365,10 @@ class Stage2Discriminator(tf.keras.Model):
     Z = tf.nn.leaky_relu(Z)
     
     Z = self.conv13(Z)
-    return tf.squeeze(Z)
+ 
+    Z = tf.squeeze(Z)
+    print(Z.shape)
+    return Z
 
 
 class Stage2Model(keras.Model):
@@ -369,7 +380,7 @@ class Stage2Model(keras.Model):
         self.generator2_optimizer = keras.optimizers.Adam(learning_rate= 0.0001, beta_1= 0.5 , beta_2= 0.999)
         self.discriminator2_optimizer = keras.optimizers.Adam(learning_rate= 0.0001, beta_1= 0.5 , beta_2= 0.999)
         self.noise_dim = 100
-    def train(self, train_ds, batch_size= 64, num_epochs =1,steps_per_epoch =125):
+    def train(self, train_ds, num_epochs =1,steps_per_epoch =125):
 
         for epoch in range(num_epochs):
             print("Epoch %d/%d:\n  "%(epoch + 1, num_epochs), end = "")
@@ -381,7 +392,8 @@ class Stage2Model(keras.Model):
             generator_loss_log = []
             discriminator_loss_log = []
             steps_per_epoch = steps_per_epoch
-            batch_iter = iter(train_ds) 
+            batch_iter = iter(train_ds)
+            batch_size = next(batch_iter)[0].shape[0] 
             for i in range(steps_per_epoch):
                 if i% 5 ==0:
                     print("=", end = "")
@@ -390,22 +402,23 @@ class Stage2Model(keras.Model):
                 z_noise = tf.random.normal((batch_size, self.noise_dim))
                 mismatched_images = tf.roll(hr_image_batch, shift=1, axis = 0)
 
-                real_labels = tf.random.uniform(shape = (batch_size, ), minval = 0.9, maxval=1.0)
-                fake_labels = tf.random.uniform(shape = (batch_size, ), minval = 0.0 , maxval = 0.1)
+                real_labels = tf.random.uniform(shape=(batch_size,), minval = 0.9, maxval=1.0)
+                fake_labels = tf.random.uniform(shape=(batch_size,), minval = 0.0 , maxval = 0.1)
                 mismatched_labels = tf.random.uniform(shape = (batch_size, ), minval = 0.0, maxval = 0.1)
 
                 with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
                     lr_fake_images , phi = self.generator1([embedding_batch,z_noise])
                     hr_fake_images        = self.generator2(lr_fake_images)
-
                     real_logits = self.discriminator2([hr_image_batch, embedding_batch])
                     fake_logits = self.discriminator2([hr_fake_images, embedding_batch])
                     mismatched_logits = self.discriminator2([mismatched_images, embedding_batch])
-
+                    # print(real_logits.shape)
+                    # print(mismatched_logits.shape)
+                    # print(real_logits.shape)
                     l_sup = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels,real_logits))
                     l_klreg = KL_loss(tf.random.normal((phi.shape[0], phi.shape[1])), phi)
                     generator_loss = l_sup + 2.0*l_klreg
-                    
+                
                     
                     l_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels,real_logits))
                     l_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(fake_logits,fake_labels))

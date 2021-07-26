@@ -8,6 +8,7 @@ __pycache__/
 # zip files
 *.zip
 # idea INFORMATION
+*.h5
 .idea
 birds/
 # data files
