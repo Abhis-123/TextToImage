@@ -62,9 +62,7 @@ class Stage1Generator(keras.Model):
     def call(self,inputs):
         embedding , noise = inputs
         c , phi = self.augmentation(embedding)
-
         gen_input = self.concat([c,noise])
-        
         x = self.dense(gen_input)
         x = self.reshape(x)
         x = self.batchnorm1(x)
@@ -117,8 +115,8 @@ class Stage1Discriminator(keras.Model):
         y =L.LeakyReLU()(y)
 
         y = self.l13(y)
-
-        return tf.squeeze(y)
+        y = tf.squeeze(y)
+        return y
 
 
 def KL_loss(y_true, y_pred):
@@ -133,8 +131,8 @@ class Stage1Model(tf.keras.Model):
     super(Stage1Model, self).__init__()
     self.generator = Stage1Generator()
     self.discriminator = Stage1Discriminator()
-    self.generator_optimizer = keras.optimizers.Adam(learning_rate= 0.0004, beta_1= 0.5 , beta_2= 0.999)
-    self.discriminator_optimizer = keras.optimizers.Adam(learning_rate= 0.0004, beta_1= 0.5 , beta_2= 0.999)
+    self.generator_optimizer = keras.optimizers.Adam(learning_rate= 0.00005, beta_1= 0.5 , beta_2= 0.999)
+    self.discriminator_optimizer = keras.optimizers.Adam(learning_rate= 0.00005, beta_1= 0.5 , beta_2= 0.999)
     self.noise_dim = 100
     self.c_dim = 128
     self.loss = {}
@@ -148,7 +146,7 @@ class Stage1Model(tf.keras.Model):
     self.generator.load_weights(path+"/stage1_generator.h5")
     self.discriminator.load_weights(path+"/stage1_discriminator.h5")
 
-  def train(self, train_ds, batch_size = 64, num_epochs = 600):
+  def train(self, train_ds, batch_size = 64, num_epochs = 600,save_weights_epoch=5,train_length=8855):
     for epoch in range(num_epochs):
       print("Epoch %d/%d:\n "%(epoch + 1, num_epochs), end = "")
       start_time = time.time()
@@ -158,7 +156,7 @@ class Stage1Model(tf.keras.Model):
     
       generator_loss_log = []
       discriminator_loss_log = []
-      steps_per_epoch = 125
+      steps_per_epoch = train_length//batch_size
       batch_iter = iter(train_ds)
       for i in range(steps_per_epoch):
         if i % 5 == 0:
@@ -181,8 +179,9 @@ class Stage1Model(tf.keras.Model):
           mismatched_logits = self.discriminator([mismatched_images, embedding_batch])
           
           l_sup = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels, fake_logits))
-          l_klreg = KL_loss(tf.random.normal((phi.shape[0], phi.shape[1])), phi)
-          generator_loss = l_sup + 2.0*l_klreg
+          #l_klreg = KL_loss(tf.random.normal((phi.shape[0], phi.shape[1])), phi)
+          generator_loss = l_sup 
+          #generator_loss = l_sup + 2.0*l_klreg
           
           l_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels, real_logits))
           l_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(fake_labels, fake_logits))
@@ -205,7 +204,7 @@ class Stage1Model(tf.keras.Model):
         template = " - generator_loss: {:.4f} - discriminator_loss: {:.4f} - epoch_time: {:.2f} s"
         print(template.format(tf.reduce_mean(generator_loss_log), tf.reduce_mean(discriminator_loss_log), epoch_time))
 
-      if (epoch + 1) % 10 == 0 or epoch == num_epochs - 1:
+      if (epoch + 1) % save_weights_epoch == 0 or epoch == num_epochs - 1:
         save_path = "./lr_results/epoch_" + str(epoch + 1)
         temp_embeddings = None
         for _, embeddings in train_ds:
@@ -238,6 +237,8 @@ def generate_image(self, embedding, batch_size= 64):
     generated_image = self.generator([embedding, z_noise])
     return generated_image                
 
+           
+
 
 
 def ResidualBlock(input, num_filters):
@@ -254,8 +255,12 @@ def ResidualBlock(input, num_filters):
 class Stage2Generator(keras.Model):
     def __init__(self,*args, **kwargs):
         super(Stage2Generator, self).__init__(*args, **kwargs)
+        self.embedding = EmbeddingCompresssor()
+        self.reshape   = L.Reshape(target_shape=(1, 1, 128))
+        self.concat    = L.Concatenate()
 
     def call(self,inputs):
+        image, embedding = inputs
         x = ResidualBlock(inputs, 128)
         x = ResidualBlock(x,256)
         x = UpSamplingBlock(x,256)
