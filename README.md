@@ -1,11 +1,35 @@
-# TextToImage
-Descriptions for GANs
+# StackGAN++
 
-In this work we are interested in translating text in the form of single-sentence human-written descriptions directly into image pixels. For example, “this small bird has a short, pointy orange beak and white belly” or ”the petals of this flower are pink and the anthers are yellow”. The problem of generating images from visual descriptions gained interest in the research community, but it is far from being solved.
-To solve this challenging problem requires solving two subproblems: first, learn a text feature representation that captures the important visual details; and second, use these features to synthesize a compelling image that a human might mistake for real. Fortunately, deep learning has enabled enormous progress in both subproblems - natural language representation and image synthesis - in the previous several years, and we build on this for our current task.
+![stackgan++](media/stackgan.png)
 
+### Realistic Image Synthesis with Stacked Generative Adversarial Networks
 
+This is my **PyTorch** implementation of StackGAN++ as it is delineated in the paper and the official repo. I attempted to implement it in a configurable way so as to allow for easy experimentation, e.g. I easily set it up afterwards to include a contrastive loss or for Zero-shot Learning. Check out the [paper](https://ieeexplore.ieee.org/abstract/document/8411144/?casa_token=Q23wQ253kzMAAAAA:aTAyMTOs1v-rIpblUjvBQW36XioeybXfr2Ap-l9dgjZzKsKVowBOYzYDmSHl8XJ6OkVBcBhqCA) (where I got the above image from) and show some love to the authors at their [official repo](https://github.com/hanzhanggit/StackGAN-v2).
 
-## Tasks 
-this section will contain the tasks and their discription 
- 1. Go through the resources mentioned in [resources](./resources.md) file 
+## Datasets
+
+Download datasets from links in the official repo. The dataset classes expect your dataset directory to be something like:
+
+```
+CUB
+ |
+ |- images
+ |     |
+ |     |- 001.Black_footed_Albatross
+ |     |            |
+ |     |            |- Black_footed_Albatross_#.jpg
+ |     |            |- ...
+ |     |- ...
+ |
+ |- embeddings
+ |      |
+ |      |- char-CNN-RNN-embeddings.pickle
+ |      |- class_info.pickle
+ |      |- filenames.pickle
+ |
+ |- ...other necessary CUB stuff...
+```
+
+## StackGAN++ code
+
+The StackGAN class can be found in `stackgan/modules/stackgan_v2.py`, its training routine in `stackgan/training/stackgan_v2.py` and all other necessary components can be traced via the imports in these files. To train a StackGAN++, you can use the script `scripts/train_stackgan_v2`, after configuring the parameters in it to your liking and configuration. Logs and PyTorch models are created automatically. All you need to use the trained model afterwards is to create a StackGAN class instance and load the corresponding `.pt` file. Happy hacking!
