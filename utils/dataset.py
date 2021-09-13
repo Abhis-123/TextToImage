@@ -89,24 +89,26 @@ class Dataset():
     embedding = embeddings[embedding_index]
     return image, embedding
   
-  def get_train_ds(self):
+  def get_train_ds(self,prefetch=True):
     BUFFER_SIZE = len(self.train_filenames)
     ds = tf.data.Dataset.from_tensor_slices((self.train_filenames, self.train_embeddings, self.train_bounding_boxes))
     ds = ds.shuffle(BUFFER_SIZE)
     ds = ds.repeat()
     ds = ds.map(self.parse_function, num_parallel_calls = WORKERS)
     ds = ds.batch(self.batch_size, drop_remainder = True)
-    ds = ds.prefetch(1)
+    if prefetch ==True:
+      ds = ds.prefetch(1)
     return ds
   
-  def get_test_ds(self):
+  def get_test_ds(self, prefetch=True):
     BUFFER_SIZE = len(self.test_filenames)
     ds = tf.data.Dataset.from_tensor_slices((self.test_filenames, self.test_embeddings, self.test_bounding_boxes))
     ds = ds.shuffle(BUFFER_SIZE)
     ds = ds.repeat(1)
     ds = ds.map(self.parse_function, num_parallel_calls = WORKERS)
     ds = ds.batch(self.batch_size, drop_remainder = True)
-    ds = ds.prefetch(1)
+    if prefetch== True:
+      ds = ds.prefetch(1)
     return ds
 
 
@@ -115,5 +117,5 @@ if __name__ == '__main__':
     dataset = Dataset(image_size=(64,64),data_base_path="../data") 
     train_data = dataset.get_train_ds()
 
-    print(train_data)
+    print(train_data.take(1))
 

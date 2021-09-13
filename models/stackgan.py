@@ -91,7 +91,8 @@ class Stage1Discriminator(keras.Model):
         self.concat= L.Concatenate() 
         self.l11= L.Conv2D(filters = 1024, kernel_size=4,strides=2,padding='same',kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev = 0.02))
         self.l12= L.BatchNormalization(axis = -1)
-        self.l13= L.Conv2D(filters = 1, kernel_size=4,strides=2,padding='same',kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev = 0.02))
+        self.l13= L.Conv2D(filters = 1  , activation='sigmoid'
+                            ,kernel_size=4,strides=2,padding='same',kernel_initializer=tf.keras.initializers.TruncatedNormal(stddev = 0.02))
         
 
     def call(self,inputs):
@@ -120,19 +121,23 @@ class Stage1Discriminator(keras.Model):
 
 
 def KL_loss(y_true, y_pred):
-  mean = y_true[:, :128]
-  logsigma = y_pred[:, 128:]
-  loss = -logsigma + 0.5*(-1 + K.exp(2.0*logsigma) + K.square(mean))
-  loss = K.mean(loss)
-  return loss
+    kl = tf.keras.losses.KLDivergence()
+    loss =kl(y_true, y_pred)
+    loss = tf.reduce_mean(loss)
+    return loss
+
+def loss(true_label,predicted_label):
+    loss=tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(true_label, predicted_label))
+    return loss
+    
 
 class Stage1Model(tf.keras.Model):
   def __init__(self):
     super(Stage1Model, self).__init__()
     self.generator = Stage1Generator()
     self.discriminator = Stage1Discriminator()
-    self.generator_optimizer = keras.optimizers.Adam(learning_rate= 0.00005, beta_1= 0.5 , beta_2= 0.999)
-    self.discriminator_optimizer = keras.optimizers.Adam(learning_rate= 0.00005, beta_1= 0.5 , beta_2= 0.999)
+    self.generator_optimizer = keras.optimizers.Adam(learning_rate= 0.00002, beta_1= 0.5 , beta_2= 0.999)
+    self.discriminator_optimizer = keras.optimizers.Adam(learning_rate= 0.00002, beta_1= 0.5 , beta_2= 0.999)
     self.noise_dim = 100
     self.c_dim = 128
     self.loss = {}
@@ -172,20 +177,18 @@ class Stage1Model(tf.keras.Model):
         mismatched_labels = tf.random.uniform(shape = (batch_size, ), minval = 0.0, maxval = 0.1)
 
         with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
-          fake_images, phi = self.generator([embedding_batch, z_noise])
-          
+          fake_images,phi = self.generator([embedding_batch, z_noise])
           real_logits = self.discriminator([image_batch, embedding_batch])
           fake_logits = self.discriminator([fake_images, embedding_batch])
           mismatched_logits = self.discriminator([mismatched_images, embedding_batch])
-          
-          l_sup = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels, fake_logits))
-          #l_klreg = KL_loss(tf.random.normal((phi.shape[0], phi.shape[1])), phi)
-          generator_loss = l_sup 
-          #generator_loss = l_sup + 2.0*l_klreg
-          
-          l_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(real_labels, real_logits))
-          l_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(fake_labels, fake_logits))
-          l_mismatched = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(mismatched_labels, mismatched_logits))
+
+          l_sup = loss(real_labels, fake_logits)
+            
+          l_klreg = KL_loss(tf.random.normal((phi.shape[0], phi.shape[1])), phi)
+          generator_loss = l_sup + 2.0*l_klreg
+          l_real = loss(real_labels, real_logits)
+          l_fake = loss(fake_labels, fake_logits)
+          l_mismatched = loss(mismatched_labels, mismatched_logits)
           discriminator_loss = 0.5*tf.add(l_real, 0.5*tf.add(l_fake, l_mismatched))
         
         generator_gradients = generator_tape.gradient(generator_loss, self.generator.trainable_variables)
@@ -228,14 +231,16 @@ class Stage1Model(tf.keras.Model):
           os.makedirs(weights_path)
         self.generator.save_weights(weights_path+"/stage1_generator.h5")
         self.discriminator.save_weights(weights_path+"/stage1_discriminator.h5")
+        clear_output(wait=True)
 
     
 def generate_image(self, embedding, batch_size= 64):
-    self.generator.compile(loss = "mse", optimizer = "adam")
-    self.generator.load_weights("stage1_generator_600.ckpt").expect_partial()
-    z_noise = tf.random.normal((batch_size, self.noise_dim))
-    generated_image = self.generator([embedding, z_noise])
-    return generated_image                
+        #self.generator.compile(loss = "mse", optimizer = "adam")
+        #self.generator.load_weights("stage1_generator_600.ckpt").expect_partial()
+        z_noise = tf.random.normal((batch_size, self.noise_dim))
+        generated_image = self.generator([embedding, z_noise])
+        return generated_image                
+               
 
            
 
@@ -266,7 +271,8 @@ class Stage2Generator(keras.Model):
         x = DownSamplingBlock(image,num_filters=64,kernel_size = 3, strides = 1,batch_norm=False)
         x = DownSamplingBlock(x,num_filters=256)
         x = DownSamplingBlock(x,num_filters=512)
-        x = K.concatenate([c, x], axis = 3)        
+        x = K.concatenate([c, x], axis = 3)
+                
         x = ResidualBlock(x, 128)
         x = ResidualBlock(x, 256)
         x = ResidualBlock(x, 128)
