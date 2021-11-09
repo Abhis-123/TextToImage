@@ -33,3 +33,16 @@ CUB
 ## StackGAN++ code
 
 The StackGAN class can be found in `stackgan/modules/stackgan_v2.py`, its training routine in `stackgan/training/stackgan_v2.py` and all other necessary components can be traced via the imports in these files. To train a StackGAN++, you can use the script `scripts/train_stackgan_v2`, after configuring the parameters in it to your liking and configuration. Logs and PyTorch models are created automatically. All you need to use the trained model afterwards is to create a StackGAN class instance and load the corresponding `.pt` file. Happy hacking!
+
+## Refrences
+Generative Adversarial Text-to-Image Synthesis https://arxiv.org/abs/1605.05396
+
+@article{Bodnar2018TextTI,
+  title={Text to Image Synthesis Using Generative Adversarial Networks},
+  author={Cristian Bodnar},
+  journal={CoRR},
+  year={2018},
+  volume={abs/1805.00676}
+}
+
+
